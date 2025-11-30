@@ -12,20 +12,21 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- CUSTOM CSS FOR ACADEMIC STYLING (FIXED FOR DARK MODE) ---
+# --- CUSTOM CSS FOR ACADEMIC STYLING ---
+# Fixed to handle light/dark mode inconsistencies better
 st.markdown("""
 <style>
-    /* Force the main app background to be light */
+    /* Force the main app background to be light grey/white */
     .stApp {
         background-color: #f8f9fa;
     }
     
-    /* Force all text to be dark blue/black to be visible on light background */
+    /* Global text color fix for the forced light background */
     .stMarkdown, .stText, h1, h2, h3, h4, h5, h6, p, li, span, div {
         color: #0f172a !important;
     }
     
-    /* Card styling for metrics */
+    /* Card styling for metrics to pop against the background */
     div[data-testid="stMetric"] {
         background-color: #ffffff;
         padding: 15px;
@@ -34,20 +35,23 @@ st.markdown("""
         box-shadow: 0 2px 5px rgba(0,0,0,0.05);
     }
     
-    /* Specific styling for metric labels and values */
+    /* Specific styling for metric labels (small text) */
     div[data-testid="stMetricLabel"] p {
         color: #64748b !important;
         font-size: 0.9rem;
     }
-    div[data-testid="stMetricValue"] div {
+    
+    /* Specific styling for metric values (large numbers) */
+    div[data-testid="stMetricValue"] {
         color: #0f172a !important;
     }
-    
-    /* Sidebar text fix */
+
+    /* Fix Sidebar text visibility if sidebar theme differs */
     section[data-testid="stSidebar"] .stMarkdown p, 
     section[data-testid="stSidebar"] h1, 
     section[data-testid="stSidebar"] h2, 
-    section[data-testid="stSidebar"] h3 {
+    section[data-testid="stSidebar"] h3,
+    section[data-testid="stSidebar"] label {
         color: #0f172a !important;
     }
 </style>
@@ -60,7 +64,7 @@ with col_h1:
     st.markdown("### A Comparative Study on Deferred Updates")
     st.markdown("**Author:** Shujaatali Badami | **Venue:** IEEE DSIT 2024")
 with col_h2:
-    # Using a standard HTML image tag to avoid Streamlit theme processing issues
+    # Status Badge
     st.markdown('<img src="https://img.shields.io/badge/Status-Published-00d2ff?style=for-the-badge" width="200">', unsafe_allow_html=True)
 
 st.markdown("---")
@@ -91,16 +95,19 @@ with tab_theory:
     st.markdown("This simulation implements the cost formulas derived in the paper to compare **Standard LSM Updates** vs. **Badami's Deferred Updates**.")
 
     # --- MATH LOGIC ---
-    # Log base r is approximated here. We assume standard LSM ratios.
+    # Log base r is approximated using log10 for demonstration.
+    
     # Cost 1: Regular Replace (Hidden Read Penalty)
-    # Formula derived from text: Memory Access + Disk Search + Updating All Indexes (with deletions)
-    regular_cost_val = (1) + (np.log10(max(1, N_tuples - m_memtable)) * disk_seek_cost) + (1 * (2 * K_indexes - 1))
+    # Formula: Memory Access + Disk Search (LogN) + Updating All Indexes (Random Writes)
+    # We ensure N_tuples - m_memtable is at least 1 to avoid log(0) errors
+    disk_part = np.log10(max(1, N_tuples - m_memtable)) * disk_seek_cost
+    regular_cost_val = (1) + disk_part + (1 * (2 * K_indexes - 1))
     
     # Cost 2: Deferred Replace (Blind Write)
-    # Formula: Memory Access * K (Just inserting into K memtables)
+    # Formula: Memory Access * K (Just inserting into K memtables sequentially)
     deferred_cost_val = (1 * K_indexes)
 
-    speedup_factor = regular_cost_val / deferred_cost_val
+    speedup_factor = regular_cost_val / max(1, deferred_cost_val) # Avoid div by zero
 
     # --- DISPLAY METRICS ---
     c1, c2, c3 = st.columns(3)
@@ -120,14 +127,16 @@ with tab_theory:
     k_range = list(range(1, 21))
     chart_data = []
     for k in k_range:
+        # Re-calculate for the range
         reg = (1) + (np.log10(max(1, N_tuples - m_memtable)) * disk_seek_cost) + (1 * (2 * k - 1))
         defn = (1 * k)
-        chart_data.append({'Indexes (K)': k, 'Speedup Factor': reg / defn})
+        chart_data.append({'Indexes (K)': k, 'Speedup Factor': reg / max(1, defn)})
     
     df_chart = pd.DataFrame(chart_data)
-    fig = px.line(df_chart, x='Indexes (K)', y='Speedup Factor', markers=True, line_shape="spline")
+    fig = px.line(df_chart, x='Indexes (K)', y='Speedup Factor', markers=True)
     
-    # FIX: Use plotly_white template to ensure graph is visible on white background
+    # Styling the chart to fit the white theme
+    fig.update_traces(line_color='#00d2ff', line_width=3)
     fig.update_layout(
         title="Speedup Factor vs. Number of Indexes",
         xaxis_title="Number of Indexes (K)",
@@ -135,10 +144,11 @@ with tab_theory:
         hovermode="x unified",
         template="plotly_white", 
         paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)'
+        plot_bgcolor='rgba(0,0,0,0)',
+        font=dict(color="#0f172a")
     )
     # Highlight current selection
-    fig.add_vline(x=K_indexes, line_dash="dash", line_color="red", annotation_text="Current Config")
+    fig.add_vline(x=K_indexes, line_dash="dash", line_color="#ef4444", annotation_text="Current Config")
     st.plotly_chart(fig, use_container_width=True)
     
     st.info(f"**Analysis:** With {K_indexes} indexes, the Deferred Update method is **{speedup_factor:.1f}x faster** because it converts random disk reads ($O(\log_r (N-m))$) into fast sequential memory writes.")
@@ -162,12 +172,12 @@ with tab_tradeoff:
 
     # --- SIMULATION LOGIC ---
     # Based on Section V-C (Microbench) and V-D (LinkBench)
-    # Write Throughput scales linearly with write % in standard, but exponentially in deferred
     
+    # Throughput Calculation
     throughput_std = 20000 + (write_pct * 100) # Baseline
     throughput_def = 20000 + (write_pct * 1200) # Deferred scales better with writes
     
-    # Read Latency model: Deferred gets slower as writes increase (more dirty tuples to filter)
+    # Latency Calculation
     latency_std = 5.0 # Fixed base latency (ms)
     latency_def = 5.0 + (write_pct * 0.05) # Penalty adds up
     
@@ -192,12 +202,13 @@ with tab_tradeoff:
     fig2 = px.bar(perf_data, x='Metric', y='Value', color='Method', barmode='group',
                   color_discrete_map={'Standard': '#94a3b8', 'Deferred (Badami)': '#00d2ff'})
     
-    # FIX: Use plotly_white template
     fig2.update_layout(
         title="Performance Impact Analysis",
         template="plotly_white",
         paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)'
+        plot_bgcolor='rgba(0,0,0,0)',
+        font=dict(color="#0f172a"),
+        legend_title_text=''
     )
     st.plotly_chart(fig2, use_container_width=True)
     
@@ -217,10 +228,12 @@ with tab_visual:
     with col_viz1:
         st.markdown("### 🔴 Traditional Update")
         st.info("Requires consistency check *before* write.")
+        # Graphviz chart
         st.graphviz_chart('''
             digraph {
                 rankdir=TB;
-                node [shape=box style=filled fillcolor="#f1f5f9" fontcolor="black"];
+                node [shape=box style=filled fillcolor="#f1f5f9" fontcolor="black" fontname="Helvetica"];
+                edge [fontname="Helvetica" fontsize=10];
                 User [shape=ellipse fillcolor="#e2e8f0" fontcolor="black"];
                 Disk [shape=cylinder fillcolor="#cbd5e1" fontcolor="black"];
                 
@@ -235,12 +248,15 @@ with tab_visual:
     with col_viz2:
         st.markdown("### 🟢 Badami's Deferred Update")
         st.success("Writes are 'Blind'. Cleanup happens later.")
+        # Graphviz chart
         st.graphviz_chart('''
             digraph {
                 rankdir=TB;
-                node [shape=box style=filled fillcolor="#ecfdf5" fontcolor="black"];
+                node [shape=box style=filled fillcolor="#ecfdf5" fontcolor="black" fontname="Helvetica"];
+                edge [fontname="Helvetica" fontsize=10];
                 User [shape=ellipse fillcolor="#d1fae5" fontcolor="black"];
                 Compaction [shape=octagon fillcolor="#00d2ff" fontcolor="white"];
+                Disk [shape=cylinder fillcolor="#cbd5e1" fontcolor="black"];
                 
                 User -> Memtable [label="1. Blind Write (Key)", color="green", penwidth=2];
                 Memtable -> Secondary [label="2. Blind Write (SecKey)"];
@@ -248,8 +264,8 @@ with tab_visual:
                 subgraph cluster_async {
                     label = "Asynchronous Phase";
                     style=dashed;
-                    color=black;
-                    fontcolor=black;
+                    color=grey;
+                    fontcolor=grey;
                     Compaction -> Disk [label="3. Batch Cleanup"];
                 }
             }
