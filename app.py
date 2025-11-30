@@ -12,14 +12,44 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- CUSTOM CSS FOR ACADEMIC STYLING ---
+# --- CUSTOM CSS FOR ACADEMIC STYLING (FIXED FOR DARK MODE) ---
 st.markdown("""
 <style>
-    .main { background-color: #f8f9fa; }
-    h1 { color: #0f172a; font-family: 'Helvetica', sans-serif; }
-    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-    .big-font { font-size:20px !important; color: #334155; }
-    .highlight { color: #00d2ff; font-weight: bold; }
+    /* Force the main app background to be light */
+    .stApp {
+        background-color: #f8f9fa;
+    }
+    
+    /* Force all text to be dark blue/black to be visible on light background */
+    .stMarkdown, .stText, h1, h2, h3, h4, h5, h6, p, li, span, div {
+        color: #0f172a !important;
+    }
+    
+    /* Card styling for metrics */
+    div[data-testid="stMetric"] {
+        background-color: #ffffff;
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    
+    /* Specific styling for metric labels and values */
+    div[data-testid="stMetricLabel"] p {
+        color: #64748b !important;
+        font-size: 0.9rem;
+    }
+    div[data-testid="stMetricValue"] div {
+        color: #0f172a !important;
+    }
+    
+    /* Sidebar text fix */
+    section[data-testid="stSidebar"] .stMarkdown p, 
+    section[data-testid="stSidebar"] h1, 
+    section[data-testid="stSidebar"] h2, 
+    section[data-testid="stSidebar"] h3 {
+        color: #0f172a !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -30,7 +60,8 @@ with col_h1:
     st.markdown("### A Comparative Study on Deferred Updates")
     st.markdown("**Author:** Shujaatali Badami | **Venue:** IEEE DSIT 2024")
 with col_h2:
-    st.image("https://img.shields.io/badge/Status-Published-00d2ff?style=for-the-badge", width=200)
+    # Using a standard HTML image tag to avoid Streamlit theme processing issues
+    st.markdown('<img src="https://img.shields.io/badge/Status-Published-00d2ff?style=for-the-badge" width="200">', unsafe_allow_html=True)
 
 st.markdown("---")
 
@@ -95,12 +126,16 @@ with tab_theory:
     
     df_chart = pd.DataFrame(chart_data)
     fig = px.line(df_chart, x='Indexes (K)', y='Speedup Factor', markers=True, line_shape="spline")
+    
+    # FIX: Use plotly_white template to ensure graph is visible on white background
     fig.update_layout(
         title="Speedup Factor vs. Number of Indexes",
         xaxis_title="Number of Indexes (K)",
         yaxis_title="Speedup (x times)",
         hovermode="x unified",
-        plot_bgcolor="white"
+        template="plotly_white", 
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)'
     )
     # Highlight current selection
     fig.add_vline(x=K_indexes, line_dash="dash", line_color="red", annotation_text="Current Config")
@@ -156,7 +191,14 @@ with tab_tradeoff:
     
     fig2 = px.bar(perf_data, x='Metric', y='Value', color='Method', barmode='group',
                   color_discrete_map={'Standard': '#94a3b8', 'Deferred (Badami)': '#00d2ff'})
-    fig2.update_layout(plot_bgcolor="white", title="Performance Impact Analysis")
+    
+    # FIX: Use plotly_white template
+    fig2.update_layout(
+        title="Performance Impact Analysis",
+        template="plotly_white",
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)'
+    )
     st.plotly_chart(fig2, use_container_width=True)
     
     if write_pct > 50:
@@ -178,9 +220,9 @@ with tab_visual:
         st.graphviz_chart('''
             digraph {
                 rankdir=TB;
-                node [shape=box style=filled fillcolor="#f1f5f9"];
-                User [shape=ellipse fillcolor="#e2e8f0"];
-                Disk [shape=cylinder fillcolor="#cbd5e1"];
+                node [shape=box style=filled fillcolor="#f1f5f9" fontcolor="black"];
+                User [shape=ellipse fillcolor="#e2e8f0" fontcolor="black"];
+                Disk [shape=cylinder fillcolor="#cbd5e1" fontcolor="black"];
                 
                 User -> Memtable [label="1. Update(Key)"];
                 Memtable -> Disk [label="2. Hidden Read (Find Old)", color="red", penwidth=2];
@@ -196,9 +238,9 @@ with tab_visual:
         st.graphviz_chart('''
             digraph {
                 rankdir=TB;
-                node [shape=box style=filled fillcolor="#ecfdf5"];
-                User [shape=ellipse fillcolor="#d1fae5"];
-                Compaction [shape=octagon fillcolor="#00d2ff"];
+                node [shape=box style=filled fillcolor="#ecfdf5" fontcolor="black"];
+                User [shape=ellipse fillcolor="#d1fae5" fontcolor="black"];
+                Compaction [shape=octagon fillcolor="#00d2ff" fontcolor="white"];
                 
                 User -> Memtable [label="1. Blind Write (Key)", color="green", penwidth=2];
                 Memtable -> Secondary [label="2. Blind Write (SecKey)"];
@@ -206,6 +248,8 @@ with tab_visual:
                 subgraph cluster_async {
                     label = "Asynchronous Phase";
                     style=dashed;
+                    color=black;
+                    fontcolor=black;
                     Compaction -> Disk [label="3. Batch Cleanup"];
                 }
             }
