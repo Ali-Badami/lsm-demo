@@ -30,7 +30,7 @@ with col_h1:
     st.markdown("### A Comparative Study on Deferred Updates")
     st.markdown("**Author:** Shujaatali Badami | **Venue:** IEEE DSIT 2024")
 with col_h2:
-    st.image("https://img.shields.io/badge/Status-Published-00d2ff?style=for-the-badge", width=200)
+    st.image("[https://img.shields.io/badge/Status-Published-00d2ff?style=for-the-badge](https://img.shields.io/badge/Status-Published-00d2ff?style=for-the-badge)", width=200)
 
 st.markdown("---")
 
@@ -221,13 +221,3 @@ with tab_visual:
 # --- FOOTER ---
 st.markdown("---")
 st.caption("© 2025 Shujaatali Badami. Interactive implementation of research presented at IEEE DSIT 2024.")
-```
-
-### **Requirements File**
-Ensure your `requirements.txt` contains exactly these lines:
-```text
-streamlit
-pandas
-numpy
-plotly
-graphviz
