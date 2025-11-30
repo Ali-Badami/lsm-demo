@@ -12,51 +12,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- CUSTOM CSS FOR ACADEMIC STYLING ---
-# Fixed to handle light/dark mode inconsistencies better
-st.markdown("""
-<style>
-    /* Force the main app background to be light grey/white */
-    .stApp {
-        background-color: #f8f9fa;
-    }
-    
-    /* Global text color fix for the forced light background */
-    .stMarkdown, .stText, h1, h2, h3, h4, h5, h6, p, li, span, div {
-        color: #0f172a !important;
-    }
-    
-    /* Card styling for metrics to pop against the background */
-    div[data-testid="stMetric"] {
-        background-color: #ffffff;
-        padding: 15px;
-        border-radius: 10px;
-        border: 1px solid #e2e8f0;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-    }
-    
-    /* Specific styling for metric labels (small text) */
-    div[data-testid="stMetricLabel"] p {
-        color: #64748b !important;
-        font-size: 0.9rem;
-    }
-    
-    /* Specific styling for metric values (large numbers) */
-    div[data-testid="stMetricValue"] {
-        color: #0f172a !important;
-    }
-
-    /* Fix Sidebar text visibility if sidebar theme differs */
-    section[data-testid="stSidebar"] .stMarkdown p, 
-    section[data-testid="stSidebar"] h1, 
-    section[data-testid="stSidebar"] h2, 
-    section[data-testid="stSidebar"] h3,
-    section[data-testid="stSidebar"] label {
-        color: #0f172a !important;
-    }
-</style>
-""", unsafe_allow_html=True)
-
 # --- HEADER SECTION ---
 col_h1, col_h2 = st.columns([3, 1])
 with col_h1:
@@ -98,16 +53,20 @@ with tab_theory:
     # Log base r is approximated using log10 for demonstration.
     
     # Cost 1: Regular Replace (Hidden Read Penalty)
-    # Formula: Memory Access + Disk Search (LogN) + Updating All Indexes (Random Writes)
-    # We ensure N_tuples - m_memtable is at least 1 to avoid log(0) errors
+    # Formula derived from vldb_sample.tex Section IV:
+    # Cost = O(log_b m) [Mem] + O(log_r(N-m)) [Disk] + O(log_b m) * (2K - 1) [Update Indexes]
+    
     disk_part = np.log10(max(1, N_tuples - m_memtable)) * disk_seek_cost
-    regular_cost_val = (1) + disk_part + (1 * (2 * K_indexes - 1))
+    mem_part = 1 # Abstract unit for O(log_b m)
+    
+    # Standard: Mem Check + Disk Check + Update all K indexes (delete old + insert new)
+    regular_cost_val = mem_part + disk_part + (mem_part * (2 * K_indexes - 1))
     
     # Cost 2: Deferred Replace (Blind Write)
-    # Formula: Memory Access * K (Just inserting into K memtables sequentially)
-    deferred_cost_val = (1 * K_indexes)
+    # Formula: O(log_b m) * K (Just inserting into K memtables sequentially)
+    deferred_cost_val = (mem_part * K_indexes)
 
-    speedup_factor = regular_cost_val / max(1, deferred_cost_val) # Avoid div by zero
+    speedup_factor = regular_cost_val / max(1, deferred_cost_val)
 
     # --- DISPLAY METRICS ---
     c1, c2, c3 = st.columns(3)
@@ -128,24 +87,20 @@ with tab_theory:
     chart_data = []
     for k in k_range:
         # Re-calculate for the range
-        reg = (1) + (np.log10(max(1, N_tuples - m_memtable)) * disk_seek_cost) + (1 * (2 * k - 1))
+        reg = 1 + (np.log10(max(1, N_tuples - m_memtable)) * disk_seek_cost) + (1 * (2 * k - 1))
         defn = (1 * k)
         chart_data.append({'Indexes (K)': k, 'Speedup Factor': reg / max(1, defn)})
     
     df_chart = pd.DataFrame(chart_data)
     fig = px.line(df_chart, x='Indexes (K)', y='Speedup Factor', markers=True)
     
-    # Styling the chart to fit the white theme
+    # Use standard plotly template that adapts to Streamlit theme
     fig.update_traces(line_color='#00d2ff', line_width=3)
     fig.update_layout(
         title="Speedup Factor vs. Number of Indexes",
         xaxis_title="Number of Indexes (K)",
         yaxis_title="Speedup (x times)",
-        hovermode="x unified",
-        template="plotly_white", 
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        font=dict(color="#0f172a")
+        hovermode="x unified"
     )
     # Highlight current selection
     fig.add_vline(x=K_indexes, line_dash="dash", line_color="#ef4444", annotation_text="Current Config")
@@ -173,13 +128,13 @@ with tab_tradeoff:
     # --- SIMULATION LOGIC ---
     # Based on Section V-C (Microbench) and V-D (LinkBench)
     
-    # Throughput Calculation
+    # Throughput Calculation (Ops/Sec)
     throughput_std = 20000 + (write_pct * 100) # Baseline
     throughput_def = 20000 + (write_pct * 1200) # Deferred scales better with writes
     
-    # Latency Calculation
-    latency_std = 5.0 # Fixed base latency (ms)
-    latency_def = 5.0 + (write_pct * 0.05) # Penalty adds up
+    # Latency Calculation (ms)
+    latency_std = 5.0 # Fixed base latency
+    latency_def = 5.0 + (write_pct * 0.05) # Penalty adds up as dirty tuples accumulate
     
     # --- METRICS ROW ---
     m1, m2, m3, m4 = st.columns(4)
@@ -204,10 +159,6 @@ with tab_tradeoff:
     
     fig2.update_layout(
         title="Performance Impact Analysis",
-        template="plotly_white",
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        font=dict(color="#0f172a"),
         legend_title_text=''
     )
     st.plotly_chart(fig2, use_container_width=True)
@@ -223,12 +174,12 @@ with tab_tradeoff:
 with tab_visual:
     st.subheader("Mechanism: How 'Hidden Reads' are Eliminated")
     
+    st.markdown("#### 1. Write Path Comparison")
     col_viz1, col_viz2 = st.columns(2)
     
     with col_viz1:
-        st.markdown("### 🔴 Traditional Update")
-        st.info("Requires consistency check *before* write.")
-        # Graphviz chart
+        st.markdown("**🔴 Traditional Update**")
+        st.caption("Requires consistency check *before* write.")
         st.graphviz_chart('''
             digraph {
                 rankdir=TB;
@@ -246,9 +197,8 @@ with tab_visual:
         ''')
     
     with col_viz2:
-        st.markdown("### 🟢 Badami's Deferred Update")
-        st.success("Writes are 'Blind'. Cleanup happens later.")
-        # Graphviz chart
+        st.markdown("**🟢 Badami's Deferred Update**")
+        st.caption("Writes are 'Blind'. Cleanup happens later.")
         st.graphviz_chart('''
             digraph {
                 rankdir=TB;
@@ -271,12 +221,49 @@ with tab_visual:
             }
         ''')
 
-    st.markdown("""
-    ### Key Concepts (Glossary)
-    * **Blind Write:** Writing data immediately without checking if it exists on disk.
-    * **Dirty Tuple:** An old version of a record that persists in secondary indexes until the next compaction cycle.
-    * **Deferred Update:** The process of moving the "cleanup" logic from the critical write path to the background compaction threads.
-    """)
+    st.markdown("---")
+    st.markdown("#### 2. The Read Trade-off (Dirty Tuples)")
+    st.markdown("Based on `secondary_reading_example.pdf`, reading becomes more complex because we might encounter old data that hasn't been cleaned up yet.")
+    
+    st.graphviz_chart('''
+        digraph {
+            rankdir=LR;
+            node [shape=rect style=filled fillcolor="#fff" fontname="Helvetica"];
+            
+            Query [shape=note label="SELECT * WHERE sk=sk1" fillcolor="#e0f2fe"];
+            
+            subgraph cluster_sec {
+                label = "Secondary Index";
+                style=filled;
+                color=lightgrey;
+                S1 [label="{pk1, sk1}\nver=3"];
+                S2 [label="{pk2, sk1}\nver=2"];
+                S3 [label="{pk3, sk1}\nver=1"];
+                
+                S1 -> S2 [label="Next"];
+                S2 -> S3 [label="Next"];
+            }
+            
+            subgraph cluster_pri {
+                label = "Primary Index (Truth)";
+                style=filled;
+                color="#f0f9ff";
+                P1 [label="{pk1, sk2}\nver=4" fillcolor="#fca5a5"];
+                P2 [label="{pk2, sk2}\nver=5" fillcolor="#fca5a5"];
+                P3 [label="{pk3, sk1}\nver=1" fillcolor="#86efac"];
+            }
+            
+            Query -> S1 [label="1. Find"];
+            S1 -> P1 [label="2. Verify"];
+            P1 -> S2 [label="Mismatch (Dirty)\nRetry" color="red" style="dashed"];
+            S2 -> P2 [label="3. Verify"];
+            P2 -> S3 [label="Mismatch (Dirty)\nRetry" color="red" style="dashed"];
+            S3 -> P3 [label="4. Verify"];
+            P3 -> Result [label="Match!\nReturn" color="green" penwidth=2];
+            
+            Result [shape=oval fillcolor="#86efac" label="Return Tuple"];
+        }
+    ''')
 
 # --- FOOTER ---
 st.markdown("---")
