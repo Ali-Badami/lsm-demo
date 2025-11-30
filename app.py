@@ -68,7 +68,7 @@ with tab1:
     fig = px.line(df_chart, x='K', y='Speedup', markers=True, 
                   title="Speedup Factor vs. Number of Indexes",
                   labels={'K': 'Number of Secondary Indexes', 'Speedup': 'Speedup Factor (X times)'})
-    fig.add_annotation(x=5, y=df_chart[df_chart['K']==5]['Speedup'].values[0], text="Your Paper's Setup", showarrow=True)
+    fig.add_annotation(x=5, y=df_chart[df_chart['K']==5]['Speedup'].values[0], text="My Paper's Setup", showarrow=True)
     st.plotly_chart(fig, use_container_width=True)
     
     st.info(f"**Insight:** As shown in the graph, the speedup decreases as K increases, but remains significant. For K={K_indexes}, we eliminate the costly 'Hidden Read' ($O(\log_r (N-m))$), converting random disk reads into blind memory writes[cite: 100].")
@@ -116,7 +116,7 @@ with tab2:
                    title="System Performance based on Workload Type")
     st.plotly_chart(fig2, use_container_width=True)
     
-    st.warning("**Conclusion:** Your algorithm is optimal for **Write-Intensive** workloads (Microbench) but incurs a read penalty in Read-Intensive scenarios (LinkBench).")
+    st.warning("**Conclusion:** My algorithm is optimal for **Write-Intensive** workloads (Microbench) but incurs a read penalty in Read-Intensive scenarios (LinkBench).")
 
 # --- TAB 3: EDUCATIONAL VISUALIZER ---
 with tab3:
